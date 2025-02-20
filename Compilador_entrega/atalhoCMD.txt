@@ -1,0 +1,51 @@
+obj-m += src/pendrive_driver.o
+
+MODULE_NAME := pendrive_driver
+MODULE_FILE := src/$(MODULE_NAME).ko
+PWD := $(shell pwd)
+CC := /usr/bin/gcc
+KERNEL_BUILD := /lib/modules/$(shell uname -r)/build
+
+default: run
+
+all:
+	$(MAKE) -C $(KERNEL_BUILD) M=$(PWD)/src CC=$(CC) modules
+
+clean:
+	$(MAKE) -C $(KERNEL_BUILD) M=$(PWD)/src CC=$(CC) clean
+
+remove:
+	@if lsmod | grep -q $(MODULE_NAME); then \
+		echo "Removendo módulo $(MODULE_NAME)..."; \
+		sudo rmmod $(MODULE_NAME); \
+	else \
+		echo "Módulo $(MODULE_NAME) não está carregado."; \
+	fi
+
+insert:
+	@if [ -f $(MODULE_FILE) ]; then \
+		echo "Inserindo módulo $(MODULE_FILE)..."; \
+		sudo insmod $(MODULE_FILE); \
+	else \
+		echo "Arquivo $(MODULE_FILE) não encontrado!"; \
+		exit 1; \
+	fi
+
+setup:
+	@sudo chmod 666 /dev/$(MODULE_NAME)
+	@echo "Configurando módulo com echo..."
+	@echo "valor_para_escrever" | sudo tee /dev/$(MODULE_NAME) > /dev/null
+
+install:
+	@echo "Instalando scripts e regras udev..."
+	@sudo cp scripts/load_pendrive_driver.sh /usr/local/bin/
+	@sudo chmod +x /usr/local/bin/load_pendrive_driver.sh
+	@sudo cp scripts/99-pendrive.rules /etc/udev/rules.d/
+	@sudo udevadm control --reload-rules
+	@echo "Instalação concluída."
+
+interface:
+	python3 src/gui_send_path.py
+
+run: all remove insert setup install interface
+	@echo "Módulo $(MODULE_NAME) compilado, removido, inserido e configurado com sucesso."
